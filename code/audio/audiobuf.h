@@ -1,18 +1,28 @@
 // audiobuf.h
 
+#ifndef AUDIOBUF_H_
+#define AUDIOBUF_H_
+
 #include <mutex>
 #include <stdint.h> // For uint32_t
 
-// Define BYTE if not on Windows, where it's usually defined in windows.h
-#ifndef _WIN32
-typedef unsigned char BYTE;
+#ifdef _WIN32
+    #include <windows.h> // For BYTE, UINT32, WAVEFORMATEX
+    // No need to redefine BYTE or UINT32 if windows.h is included
 #else
- // On Windows, windows.h (included indirectly or directly by common.h) should provide BYTE
- // If common.h is also modified to not include windows.h directly, ensure BYTE is defined.
- // For now, assuming common.h or another header pulls in windows.h for _WIN32 builds.
- // If errors occur, explicitly include <windows.h> or define BYTE here for Windows too.
-#include <windows.h> // This is to ensure BYTE and UINT32 are defined for Windows if not already.
-                     // Ideally, this windows.h include would be managed better.
+    // Define BYTE and UINT32 for non-Windows
+    #ifndef BYTE
+        #define BYTE unsigned char
+    #endif
+    #ifndef UINT32
+        #define UINT32 uint32_t
+    #endif
+    // Forward declare WAVEFORMATEX for the function signature, as it's Windows-specific
+    // and the Linux path will pass nullptr for it.
+    // Use 'struct' to ensure it's treated as a type name for the pointer.
+    // The actual definition is not needed for Linux if we only pass it as an opaque pointer.
+    struct tWAVEFORMATEX; // Opaque forward declaration
+    typedef struct tWAVEFORMATEX WAVEFORMATEX;
 #endif
 
 
@@ -23,7 +33,14 @@ void ResetAudioBuf();
 void GetAudioBuf(unsigned char *pWaveL, unsigned char *pWaveR, int SamplesCount);
 
 // Save audio data for visualizer
-// Parameters previously in WAVEFORMATEX are now passed directly.
-// is_float indicates if pData is float (true) or int16_t (false)
-// nNumFramesToRead is the number of audio frames (a frame contains samples for all channels)
-void SetAudioBuf(const unsigned char *pData, const uint32_t nNumFramesToRead, int num_channels, int bits_per_sample, bool is_float);
+// The WAVEFORMATEX* is only used by the Windows implementation in loopback-capture.cpp
+// For Linux, pwfx_win will be nullptr, and the function should use
+// num_channels, bits_per_sample, and is_float.
+void SetAudioBuf(const BYTE *pData,
+                 const UINT32 nNumFramesToRead,
+                 int num_channels,
+                 int bits_per_sample,
+                 bool is_float,
+                 const WAVEFORMATEX *pwfx_win = nullptr);
+
+#endif // AUDIOBUF_H_

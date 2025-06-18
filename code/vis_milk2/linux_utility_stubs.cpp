@@ -14,6 +14,8 @@
 #include <cstring> // For memset, wcslen, wcsncpy
 #include <map>     // For INI stubs
 #include <algorithm> // For std::replace
+#include <sys/stat.h> // For mkdir
+#include <wordexp.h>  // For wordexp (tilde expansion)
 
 // Define types if not already available via utility.h's Linux path
 // These are basic fallbacks. A more robust solution would use a shared config.h or ensure utility.h handles this.
@@ -36,81 +38,150 @@ _locale_t g_use_C_locale = (_locale_t)0; // Placeholder
 // Definition for GUID_NULL, expected to be declared as extern in the shim utility.h
 const GUID GUID_NULL = { 0x00000000, 0x0000, 0x0000, { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
 
-// Ini file stubs (returning defaults or doing minimal operations)
-// Helper to convert wstring to string for file operations if needed
+// Helper to convert std::wstring to std::string (UTF-8)
 std::string LinuxWstringToString(const std::wstring& wstr) {
     // This is a simplified conversion. Production code should handle UTF-8 properly.
+    // std::wstring_convert is deprecated in C++17.
+    // For basic ASCII, this might suffice:
     std::string str(wstr.length(), ' ');
-    std::transform(wstr.begin(), wstr.end(), str.begin(), [](wchar_t wc){ return (char)wc; });
+    std::transform(wstr.begin(), wstr.end(), str.begin(), [](wchar_t wc){
+        if (wc < 0x80) return static_cast<char>(wc); // Basic ASCII
+        return '?'; // Placeholder for non-ASCII
+    });
     return str;
 }
-
+// Helper to convert const char* to std::wstring
 std::wstring LinuxStringToWstring(const std::string& str) {
     std::wstring wstr(str.length(), L' ');
-    std::transform(str.begin(), str.end(), wstr.begin(), [](char c){ return (wchar_t)c; });
+    std::transform(str.begin(), str.end(), wstr.begin(), [](char c){ return static_cast<wchar_t>(c); });
     return wstr;
 }
 
 
 // Very simplified INI handling for stubs
 static std::map<std::wstring, std::map<std::wstring, std::wstring>> linux_ini_data;
-static std::wstring linux_ini_current_file;
+static std::wstring linux_ini_current_file_path; // Store full path
 
-void LoadIniFileLinux(const wchar_t* fileName) {
-    if (fileName == nullptr || (linux_ini_current_file == fileName && !linux_ini_data.empty())) {
+std::wstring GetLinuxConfigFilePathRecursive(LPCWSTR lpFileName) {
+    std::wstring configFilePath;
+    const char* configHome = getenv("XDG_CONFIG_HOME");
+    std::string narrowPath;
+
+    if (configHome && configHome[0] != '\0') {
+        narrowPath = configHome;
+        narrowPath += "/milkdrop3/";
+    } else {
+        const char* home = getenv("HOME");
+        if (home && home[0] != '\0') {
+            narrowPath = home;
+            narrowPath += "/.config/milkdrop3/";
+        } else {
+            narrowPath = "./.milkdrop3_config/"; // Fallback to current directory if HOME is not set
+        }
+    }
+
+    // Create directory using mkdir -p equivalent
+    std::string tempPath = "";
+    size_t start_pos = 0;
+    do {
+        size_t end_pos = narrowPath.find('/', start_pos);
+        if (end_pos == std::string::npos) {
+            tempPath += narrowPath.substr(start_pos);
+            mkdir(tempPath.c_str(), 0755); // S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH
+            break;
+        }
+        tempPath += narrowPath.substr(start_pos, end_pos - start_pos + 1);
+        mkdir(tempPath.c_str(), 0755);
+        start_pos = end_pos + 1;
+    } while(true);
+
+
+    configFilePath = LinuxStringToWstring(narrowPath);
+
+    if (lpFileName) {
+        if (lpFileName[0] == L'/') {
+             configFilePath = lpFileName;
+        } else {
+             configFilePath += lpFileName;
+        }
+    } else {
+        configFilePath += L"milkdrop.ini";
+    }
+    return configFilePath;
+}
+
+
+void LoadIniFileLinux(LPCWSTR lpFileName) {
+    std::wstring filePath = GetLinuxConfigFilePathRecursive(lpFileName);
+    if (filePath == linux_ini_current_file_path && !linux_ini_data.empty()) {
         return;
     }
     linux_ini_data.clear();
-    linux_ini_current_file = fileName;
-    std::wifstream wif(LinuxWstringToString(fileName).c_str());
-    if (!wif.is_open()) {
+    linux_ini_current_file_path = filePath;
+
+    std::wifstream inFile(LinuxWstringToString(filePath).c_str());
+    if (!inFile.is_open()) {
         return;
     }
-    std::wstring line, currentSection;
-    while (std::getline(wif, line)) {
+    std::wstring currentSection;
+    std::wstring line;
+    while (std::getline(inFile, line)) {
+        // Trim whitespace
+        line.erase(0, line.find_first_not_of(L" \t\r\n"));
+        line.erase(line.find_last_not_of(L" \t\r\n") + 1);
+
         if (line.empty() || line[0] == L';' || line[0] == L'#') continue;
+
         if (line[0] == L'[' && line.back() == L']') {
             currentSection = line.substr(1, line.length() - 2);
         } else if (!currentSection.empty()) {
-            size_t eqPos = line.find(L'=');
-            if (eqPos != std::wstring::npos) {
-                linux_ini_data[currentSection][line.substr(0, eqPos)] = line.substr(eqPos + 1);
+            size_t equalsPos = line.find(L'=');
+            if (equalsPos != std::wstring::npos) {
+                std::wstring key = line.substr(0, equalsPos);
+                std::wstring value = line.substr(equalsPos + 1);
+                key.erase(0, key.find_first_not_of(L" \t")); key.erase(key.find_last_not_of(L" \t") + 1);
+                value.erase(0, value.find_first_not_of(L" \t")); value.erase(value.find_last_not_of(L" \t") + 1);
+                linux_ini_data[currentSection][key] = value;
             }
         }
     }
+    inFile.close();
 }
 
-void SaveIniFileLinux(const wchar_t* fileName) {
-    if (fileName == nullptr) return;
-    std::wofstream wof(LinuxWstringToString(fileName).c_str());
-    if (!wof.is_open()) {
+void SaveIniFileLinux(LPCWSTR lpFileName) {
+    if (lpFileName == nullptr) return;
+    std::wstring filePath = GetLinuxConfigFilePathRecursive(lpFileName);
+    std::wofstream outFile(LinuxWstringToString(filePath).c_str());
+    if (!outFile.is_open()) {
         return;
     }
-    for (const auto& section : linux_ini_data) {
-        wof << L"[" << section.first << L"]" << std::endl;
-        for (const auto& entry : section.second) {
-            wof << entry.first << L"=" << entry.second << std::endl;
+    for (const auto& sectionPair : linux_ini_data) {
+        outFile << L"[" << sectionPair.first << L"]" << std::endl;
+        for (const auto& keyPair : sectionPair.second) {
+            outFile << keyPair.first << L"=" << keyPair.second << std::endl;
         }
+        outFile << std::endl;
     }
+    outFile.close();
 }
 
 
-DWORD GetPrivateProfileStringW(const wchar_t* lpAppName, const wchar_t* lpKeyName, const wchar_t* lpDefault,
-                               wchar_t* lpReturnedString, DWORD nSize, const wchar_t* lpFileName) {
+DWORD GetPrivateProfileStringW(LPCWSTR lpAppName, LPCWSTR lpKeyName, LPCWSTR lpDefault,
+                               LPWSTR lpReturnedString, DWORD nSize, LPCWSTR lpFileName) {
     LoadIniFileLinux(lpFileName);
     if (lpAppName && lpKeyName && lpReturnedString && nSize > 0) {
         auto it_app = linux_ini_data.find(lpAppName);
         if (it_app != linux_ini_data.end()) {
             auto it_key = it_app->second.find(lpKeyName);
             if (it_key != it_app->second.end()) {
-                wcsncpy(lpReturnedString, it_key->second.c_str(), nSize -1);
-                lpReturnedString[nSize-1] = L'\0';
+                wcsncpy(lpReturnedString, it_key->second.c_str(), nSize);
+                if (nSize > 0) lpReturnedString[nSize-1] = L'\0'; // Ensure null termination
                 return wcslen(lpReturnedString);
             }
         }
         if (lpDefault) {
-            wcsncpy(lpReturnedString, lpDefault, nSize -1);
-            lpReturnedString[nSize-1] = L'\0';
+            wcsncpy(lpReturnedString, lpDefault, nSize);
+            if (nSize > 0) lpReturnedString[nSize-1] = L'\0';
             return wcslen(lpReturnedString);
         }
     }
@@ -118,16 +189,16 @@ DWORD GetPrivateProfileStringW(const wchar_t* lpAppName, const wchar_t* lpKeyNam
     return 0;
 }
 
-BOOL WritePrivateProfileStringW(const wchar_t* lpAppName, const wchar_t* lpKeyName, const wchar_t* lpString,
-                                const wchar_t* lpFileName) {
+BOOL WritePrivateProfileStringW(LPCWSTR lpAppName, LPCWSTR lpKeyName, LPCWSTR lpString,
+                                LPCWSTR lpFileName) {
     if (!lpAppName || !lpKeyName || !lpFileName) return FALSE;
-    LoadIniFileLinux(lpFileName); // Load existing or prepare cache
+    LoadIniFileLinux(lpFileName);
     linux_ini_data[std::wstring(lpAppName)][std::wstring(lpKeyName)] = (lpString ? std::wstring(lpString) : std::wstring());
     SaveIniFileLinux(lpFileName);
     return TRUE;
 }
 
-int GetPrivateProfileIntW(const wchar_t* szSectionName, const wchar_t* szKeyName, int nDefault, const wchar_t* szIniFile) {
+int GetPrivateProfileIntW(LPCWSTR szSectionName, LPCWSTR szKeyName, int nDefault, LPCWSTR szIniFile) {
     wchar_t default_str[32];
     swprintf(default_str, 32, L"%d", nDefault);
     wchar_t value_str[256];
@@ -139,45 +210,48 @@ int GetPrivateProfileIntW(const wchar_t* szSectionName, const wchar_t* szKeyName
     return nDefault;
 }
 
-float GetPrivateProfileFloatW(const wchar_t* szSectionName, const wchar_t* szKeyName, float fDefault, const wchar_t* szIniFile) {
+// Definition of g_use_C_locale for utility.cpp is complex without proper C locale setup.
+// For now, this assumes standard C functions on Linux will behave as "C" locale by default for numerics.
+// If specific locale behavior is needed, this needs proper initialization.
+// _locale_t g_use_C_locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0); // Example of proper setup
+
+float GetPrivateProfileFloatW(LPCWSTR szSectionName, LPCWSTR szKeyName, float fDefault, LPCWSTR szIniFile) {
     wchar_t default_str[64];
-    swprintf(default_str, 64, L"%f", fDefault);
+    swprintf(default_str, 64, L"%f", fDefault); // Use standard swprintf
     wchar_t value_str[256];
     GetPrivateProfileStringW(szSectionName, szKeyName, default_str, value_str, 256, szIniFile);
     float val = fDefault;
-    // Use wcstof for robust parsing if available, or standard swscanf
-    if (swscanf(value_str, L"%f", &val) == 1) {
+    if (swscanf(value_str, L"%f", &val) == 1) { // Use standard swscanf
          return val;
     }
     return fDefault;
 }
 
-bool WritePrivateProfileIntW(int d, const wchar_t* szKeyName, const wchar_t* szIniFile, const wchar_t* szSectionName) {
+bool WritePrivateProfileIntW(int d, LPCWSTR szKeyName, LPCWSTR szIniFile, LPCWSTR szSectionName) {
     wchar_t value_str[32];
     swprintf(value_str, 32, L"%d", d);
     return WritePrivateProfileStringW(szSectionName, szKeyName, value_str, szIniFile);
 }
 
-bool WritePrivateProfileFloatW(float f, const wchar_t* szKeyName, const wchar_t* szIniFile, const wchar_t* szSectionName) {
+bool WritePrivateProfileFloatW(float f, LPCWSTR szKeyName, LPCWSTR szIniFile, LPCWSTR szSectionName) {
     wchar_t value_str[64];
     swprintf(value_str, 64, L"%f", f);
     return WritePrivateProfileStringW(szSectionName, szKeyName, value_str, szIniFile);
 }
 
 intptr_t myOpenURL(HWND hwnd, const wchar_t *loc) {
-    if (!loc) return 0; // Error
+    if (!loc) return 0;
     std::string url = LinuxWstringToString(std::wstring(loc));
-    // Basic sanitization for quotes to prevent command injection with system()
     std::string safe_url;
     for (char c : url) {
         if (c == '"') safe_url += "\\\"";
         else safe_url += c;
     }
-    std::string cmd = "xdg-open \"" + safe_url + "\"";
+    std::string cmd = "xdg-open \"" + safe_url + "\" > /dev/null 2>&1"; // Suppress output
     int ret = system(cmd.c_str());
-    if (ret == 0) return 33; // Success (mimicking ShellExecute success > 32)
-    perror(("xdg-open failed for: " + url).c_str());
-    return 0; // Failure
+    if (ret == 0) return 33;
+    // fprintf(stderr, "Failed to open URL '%s' with xdg-open, status: %d\n", url.c_str(), ret);
+    return 0;
 }
 
 void RemoveExtension(wchar_t *str) {
@@ -187,20 +261,25 @@ void RemoveExtension(wchar_t *str) {
 }
 
 void RemoveSingleAmpersands(wchar_t *str) {
-    // Stub or simple implementation if needed for menu display.
-    // This function was for Windows GDI specific ampersand handling.
-    // If RenderStringOpenGL doesn't need this, it can be empty.
-    // For now, simple pass-through or basic removal if absolutely needed by shared logic.
+    // Placeholder - GDI specific, may not be needed or implemented differently for GL text
 }
 
-bool CheckForMMX() { return true; } // Assume modern CPUs have MMX
-bool CheckForSSE() { return true; } // Assume modern CPUs have SSE
+#include <cpuid.h>
+bool CheckForMMX() {
+    unsigned int eax, ebx, ecx, edx;
+    if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) { return (edx & (1 << 23)) != 0; }
+    return true;
+}
+
+bool CheckForSSE() {
+    unsigned int eax, ebx, ecx, edx;
+    if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) { return (edx & (1 << 25)) != 0; }
+    return true;
+}
 
 void TextToGuid(const char *str, GUID *pGUID) {
     if (pGUID) memset(pGUID, 0, sizeof(GUID));
     if (!str || !pGUID) return;
-    // Simplified: sscanf might not be ideal for all GUID string formats.
-    // A more robust parser might be needed depending on string format.
     unsigned long d1; unsigned int d2, d3, d4[8];
     int result = sscanf(str, "%8lx-%4x-%4x-%2x%2x-%2x%2x%2x%2x%2x%2x",
         &d1, &d2, &d3, &d4[0], &d4[1], &d4[2], &d4[3], &d4[4], &d4[5], &d4[6], &d4[7]);
@@ -210,7 +289,7 @@ void TextToGuid(const char *str, GUID *pGUID) {
     }
 }
 
-void GuidToText(GUID *pGUID, char *str, int nStrLen) {
+void GuidToText(const GUID *pGUID, char *str, int nStrLen) {
     if (str && nStrLen > 0) str[0] = '\0';
     if (!pGUID || !str || nStrLen <= 0) return;
     snprintf(str, nStrLen, "%08lX-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
@@ -219,13 +298,11 @@ void GuidToText(GUID *pGUID, char *str, int nStrLen) {
         pGUID->Data4[4], pGUID->Data4[5], pGUID->Data4[6], pGUID->Data4[7]);
 }
 
-void* GetTextResource(unsigned int id, int no_fallback) {
-    return nullptr; // No PE resources on Linux
+void* GetTextResource(UINT id, int no_fallback) {
+    return nullptr;
 }
 
-// Stubs for other functions declared in utility.h that were Windows-specific
 void MissingDirectX(HWND hwnd) { /* No-op on Linux */ }
 void GetDesktopFolder(char *szDesktopFolder) { if(szDesktopFolder) szDesktopFolder[0] = '\0'; }
-// ... any other stubs needed based on utility.h's non-conditional declarations ...
 
 #endif // !_WIN32

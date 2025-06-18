@@ -9,6 +9,7 @@
 #include <wchar.h>  // For wchar_t
 #include <stddef.h> // For size_t, NULL
 #include <stdint.h> // For intptr_t
+// Do NOT include <crtdefs.h> here for the Linux shim.
 
 // Basic type compatibility
 typedef int BOOL;
@@ -21,7 +22,7 @@ typedef int BOOL;
 typedef unsigned long DWORD;
 typedef unsigned int UINT;
 typedef void* HWND;
-typedef wchar_t WCHAR; // From winnt.h
+typedef wchar_t WCHAR;
 typedef WCHAR *LPWSTR;
 typedef const WCHAR *LPCWSTR;
 typedef char CHAR;
@@ -42,13 +43,12 @@ typedef struct _GUID {
 
 // Define _locale_t for Linux
 #ifndef _LOCALE_T_DEFINED
-// This is a placeholder. Actual locale functionality requires more.
 typedef void* _locale_t;
 #define _LOCALE_T_DEFINED
 #endif // _LOCALE_T_DEFINED
-extern _locale_t g_use_C_locale; // Declaration for g_use_C_locale
+extern _locale_t g_use_C_locale;
 
-extern char keyMappings[8]; // Declaration for keyMappings
+extern char keyMappings[8];
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,35 +65,33 @@ int GetPrivateProfileIntW(LPCWSTR lpAppName, LPCWSTR lpKeyName, int nDefault, LP
 DWORD GetPrivateProfileStringW(LPCWSTR lpAppName, LPCWSTR lpKeyName, LPCWSTR lpDefault, LPWSTR lpReturnedString, DWORD nSize, LPCWSTR lpFileName);
 BOOL WritePrivateProfileStringW(LPCWSTR lpAppName, LPCWSTR lpKeyName, LPCWSTR lpString, LPCWSTR lpFileName);
 float   GetPrivateProfileFloatW(wchar_t *szSectionName, wchar_t *szKeyName, float fDefault, wchar_t *szIniFile);
-bool    WritePrivateProfileIntW(int d, wchar_t *szKeyName, wchar_t *szIniFile, wchar_t *szSectionName); // Section name at end
-bool    WritePrivateProfileFloatW(float f, wchar_t *szKeyName, wchar_t *szIniFile, wchar_t *szSectionName); // Section name at end
+bool    WritePrivateProfileIntW(int d, wchar_t *szKeyName, wchar_t *szIniFile, wchar_t *szSectionName);
+bool    WritePrivateProfileFloatW(float f, wchar_t *szKeyName, wchar_t *szIniFile, wchar_t *szSectionName);
 
 #define GetPrivateProfileBoolW(w,x,y,z) ((bool)(GetPrivateProfileIntW(w,x,y,z) != 0))
 #define GetPrivateProfileBOOLW(w,x,y,z) ((BOOL)(GetPrivateProfileIntW(w,x,y,z) != 0))
-
 
 // String manipulation
 void    RemoveExtension(wchar_t *str);
 void    RemoveSingleAmpersands(wchar_t *str);
 
 // GUID functions
-void    TextToGuid(const char *str, GUID *pGUID); // Changed to const char*
-void    GuidToText(const GUID *pGUID, char *str, int nStrLen); // Changed to const GUID*
-extern const GUID GUID_NULL; // Declaration for GUID_NULL defined in linux_utility_stubs.cpp
+void    TextToGuid(const char *str, GUID *pGUID);
+void    GuidToText(const GUID *pGUID, char *str, int nStrLen);
+extern const GUID GUID_NULL;
 
 // CPU feature checks
 bool    CheckForMMX();
 bool    CheckForSSE();
 
 // URL Opener
-intptr_t myOpenURL(HWND hwnd, const wchar_t *loc); // Changed to const wchar_t*
+intptr_t myOpenURL(HWND hwnd, const wchar_t *loc);
 
 // Resource loading stub
 void* GetTextResource(UINT id, int no_fallback);
 
 // DirectX related stubs (if their declarations are needed by common code paths)
 void    MissingDirectX(HWND hwnd);
-// void    DownloadDirectX(HWND hwnd); // Not typically called by other vis_milk2 code directly
 
 #ifdef __cplusplus
 }
