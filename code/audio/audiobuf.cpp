@@ -1,15 +1,17 @@
 // audiobuf.cpp
 
 #include "audiobuf.h"
+#include <string.h> // For memset
+#include <stdint.h> // For int8_t, uint32_t (UINT32 might be defined in audiobuf.h for Linux)
 
-#define SAMPLE_SIZE_LPB 576 // Max number of audio samples stored in circular buffer. Should be no less than SAMPLE_SIZE. Expected sampling rate is 44100 Hz or 48000 Hz (samples per second).
+#define SAMPLE_SIZE_LPB 576
 
 std::mutex pcmLpbMutex;
-unsigned char pcmLeftLpb[SAMPLE_SIZE_LPB]; // Circular buffer (left channel)
-unsigned char pcmRightLpb[SAMPLE_SIZE_LPB]; // Circular buffer (right channel)
-bool pcmBufDrained = false; // Buffer drained by visualization thread and holds no new samples
-signed int pcmLen = 0; // Actual number of samples the buffer holds. Can be less than SAMPLE_SIZE_LPB
-signed int pcmPos = 0; // Position to write new data
+unsigned char pcmLeftLpb[SAMPLE_SIZE_LPB];
+unsigned char pcmRightLpb[SAMPLE_SIZE_LPB];
+bool pcmBufDrained = false;
+signed int pcmLen = 0;
+signed int pcmPos = 0;
 
 void ResetAudioBuf() {
     std::unique_lock<std::mutex> lock(pcmLpbMutex);
@@ -17,128 +19,123 @@ void ResetAudioBuf() {
     memset(pcmRightLpb, 0, SAMPLE_SIZE_LPB);
     pcmBufDrained = false;
     pcmLen = 0;
+    pcmPos = 0;
 }
 
 void GetAudioBuf(unsigned char *pWaveL, unsigned char *pWaveR, int SamplesCount) {
     std::unique_lock<std::mutex> lock(pcmLpbMutex);
     if ((pcmLen < SamplesCount) || (pcmBufDrained)) {
-        // Buffer underrun. Insufficient new samples in circular buffer (pcmLeftLpb, pcmRightLpb)
         memset(pWaveL, 0, SamplesCount);
         memset(pWaveR, 0, SamplesCount);
     }
     else {
-        // Circular buffer (pcmLeftLpb, pcmRightLpb) hold enough samples in it
-        for (int i = 0; i < SAMPLE_SIZE_LPB; i++) {
-            // int8_t [-128 .. +127] stored into uint8_t [0..255]
-            pWaveL[i % SamplesCount] = pcmLeftLpb[(pcmPos + i) % SAMPLE_SIZE_LPB];
-            pWaveR[i % SamplesCount] = pcmRightLpb[(pcmPos + i) % SAMPLE_SIZE_LPB];
+        int read_pos = (pcmPos - pcmLen + SAMPLE_SIZE_LPB) % SAMPLE_SIZE_LPB;
+        for (int i = 0; i < SamplesCount; i++) {
+            if (i < pcmLen) { // Ensure we don't read beyond what's available
+                 pWaveL[i] = pcmLeftLpb[(read_pos + i) % SAMPLE_SIZE_LPB];
+                 pWaveR[i] = pcmRightLpb[(read_pos + i) % SAMPLE_SIZE_LPB];
+            } else { // Should not happen if pcmLen >= SamplesCount check is correct
+                 pWaveL[i] = 0;
+                 pWaveR[i] = 0;
+            }
         }
         pcmBufDrained = true;
     }
 }
 
 int8_t FltToInt(float flt) {
-    if (flt >= 1.0f) {
-        return +127; // 0x7f
-    }
-    if (flt < -1.0f) {
-        return -128; // 0x80
-    }
-    return (int8_t)(flt * 128);
+    if (flt >= 1.0f) return +127;
+    if (flt < -1.0f) return -128;
+    return (int8_t)(flt * 127.0f);
 };
 
-// Union type for sample conversion
-union u_type
-{
+union u_type {
     int32_t IntVar;
+    int16_t ShortVar;
     float FltVar;
-    uint8_t Bytes[4];
+    unsigned char Bytes[4];
 };
 
-int8_t GetChannelSample(const BYTE *pData, int BlockOffset, int ChannelOffset, const bool bInt16) {
-    u_type sample;
+int8_t GetChannelSampleProcessed(const unsigned char *frame_data_start, int channel_index, int num_channels, int bits_per_sample, bool is_float) {
+    u_type sample_union;
+    sample_union.IntVar = 0;
 
-    sample.IntVar = 0;
-    sample.Bytes[0] = pData[BlockOffset + ChannelOffset + 0];
-    sample.Bytes[1] = pData[BlockOffset + ChannelOffset + 1];
-    if (!bInt16) {
-        sample.Bytes[2] = pData[BlockOffset + ChannelOffset + 2];
-        sample.Bytes[3] = pData[BlockOffset + ChannelOffset + 3];
-    }
+    int bytes_per_sample_per_channel = bits_per_sample / 8;
+    const unsigned char *sample_ptr = frame_data_start + (channel_index * bytes_per_sample_per_channel);
 
-    if (!bInt16) {
-        return FltToInt(sample.FltVar); //float [-1.0f .. +1.0f] range converted to int8_t [-128 .. +127] and later stored into uint8_t [0 .. 255]
+    if (is_float) {
+        if (bits_per_sample == 32) {
+            memcpy(sample_union.Bytes, sample_ptr, 4); // Assuming little-endian host for direct copy
+            return FltToInt(sample_union.FltVar);
+        }
+    } else {
+        if (bits_per_sample == 16) {
+            memcpy(sample_union.Bytes, sample_ptr, 2); // Assuming little-endian host
+            return (int8_t)(sample_union.ShortVar / 256);
+        }
     }
-    else {
-        return (signed char)(sample.IntVar / 256); //int16_t [-32768 .. +32767] range converted to int8_t [-128 .. +127] and later stored into uint8_t [0..255]
-    }
+    return 0;
 }
 
-// Expecting pData holds:
-//   signed 16-bit (2 bytes) PCM, Little Endian
-//   or
-//   32-bit float (4 bytes) PCM
-// Supported audio formats:
-//   pwfx->nChannels;          /* ANY number of channels (i.e. mono, stereo...) */
-//   pwfx->nSamplesPerSec;     /* 44100 or 48000 sample rate */
-//   pwfx->nBlockAlign;        /* ANY block size of data */
-//   pwfx->wBitsPerSample;     /* 16 or 32 number of bits per sample of mono data */
+// SetAudioBuf implementation using direct parameters for format info
+void SetAudioBuf(const BYTE *pData, const UINT32 nNumFramesToRead,
+                 int num_channels, int bits_per_sample, bool is_float,
+                 const WAVEFORMATEX *pwfx_win /* = nullptr */) {
 
-void SetAudioBuf(const BYTE *pData, const UINT32 nNumFramesToRead, const WAVEFORMATEX *pwfx, const bool bInt16) {
-    int BlockOffset;
-
-    int8_t LeftSample8;
-    int8_t RightSample8;
-
+    if (!pData || nNumFramesToRead == 0 || num_channels == 0 || bits_per_sample == 0) {
+        return;
+    }
 
     std::unique_lock<std::mutex> lock(pcmLpbMutex);
-    //memset(pcmLeftLpb, 0, SAMPLE_SIZE_LPB);
-    //memset(pcmRightLpb, 0, SAMPLE_SIZE_LPB);
 
-    int i = 0;
-    int n = 0;
+    int bytes_per_sample_per_channel = bits_per_sample / 8;
+    int frame_size_in_bytes = num_channels * bytes_per_sample_per_channel;
+    if (frame_size_in_bytes == 0) return;
 
-    int start = 0;
-    int len = 0;
-    if (nNumFramesToRead >= SAMPLE_SIZE_LPB) {
-        n = 0;
-        start = nNumFramesToRead - SAMPLE_SIZE_LPB;
-        len = SAMPLE_SIZE_LPB;
-    }
-    else {
-        n = SAMPLE_SIZE_LPB - nNumFramesToRead;
-        start = 0;
-        len = nNumFramesToRead;
+    uint32_t frames_to_process = nNumFramesToRead;
+    const unsigned char* data_source_ptr = pData;
+
+    // If new data is larger than our buffer, only process the latest SAMPLE_SIZE_LPB frames
+    if (nNumFramesToRead > SAMPLE_SIZE_LPB) {
+        data_source_ptr += (nNumFramesToRead - SAMPLE_SIZE_LPB) * frame_size_in_bytes;
+        frames_to_process = SAMPLE_SIZE_LPB;
     }
 
-    for (int i = start; i < len; i++, n++) {
-        BlockOffset = i * pwfx->nBlockAlign;
+    // Manage circular buffer: advance pcmPos by the number of frames we are about to overwrite
+    // if the new data (frames_to_process) would overflow current pcmLen.
+    // Or, if new data is larger than buffer, effectively reset.
+    if (frames_to_process == SAMPLE_SIZE_LPB) { // Overwriting entire buffer
+        pcmPos = 0;
+        pcmLen = 0;
+    } else if (pcmLen + frames_to_process > SAMPLE_SIZE_LPB) {
+        int overflow = (pcmLen + frames_to_process) - SAMPLE_SIZE_LPB;
+        pcmPos = (pcmPos + overflow) % SAMPLE_SIZE_LPB;
+        pcmLen -= overflow;
+    }
 
-        // Left channel (number 0)
-        LeftSample8 = 0; // Init with silence
-        if (pwfx->nChannels >= 1) {
-            LeftSample8 = GetChannelSample(pData, BlockOffset, 0 * (pwfx->wBitsPerSample / 8), bInt16);
+
+    for (uint32_t i = 0; i < frames_to_process; ++i) {
+        const unsigned char *current_frame_ptr = data_source_ptr + (i * frame_size_in_bytes);
+
+        int8_t left_sample8 = 0;
+        if (num_channels >= 1) {
+            left_sample8 = GetChannelSampleProcessed(current_frame_ptr, 0, num_channels, bits_per_sample, is_float);
         }
 
-        // Right channel (number 1)
-        RightSample8 = LeftSample8; // Init with left channel value just in case of Mono, 1 channel count
-        if (pwfx->nChannels >= 2) {
-            RightSample8 = GetChannelSample(pData, BlockOffset, 1 * (pwfx->wBitsPerSample / 8), bInt16);
+        int8_t right_sample8 = left_sample8;
+        if (num_channels >= 2) {
+            right_sample8 = GetChannelSampleProcessed(current_frame_ptr, 1, num_channels, bits_per_sample, is_float);
         }
 
-        // TODO: add support for 96000 Hz and 192000 Hz sample rates
+        int buffer_write_idx = (pcmPos + pcmLen) % SAMPLE_SIZE_LPB;
+        pcmLeftLpb[buffer_write_idx] = left_sample8;
+        pcmRightLpb[buffer_write_idx] = right_sample8;
 
-        // Ignoring data in all other audio channels (Quadraphonic 4.0, Surround 4.0, Surround 5.1, Surround 7.1, ...)
-
-        // Saving audio data for visualizer
-        // 8-bit signed integer in Two's Complement Representation stored in unsigned char array
-        // int8_t[-128 .. + 127] stored into uint8_t[0 .. 255]
-        pcmLeftLpb[(pcmPos + n) % SAMPLE_SIZE_LPB] = LeftSample8;
-        pcmRightLpb[(pcmPos + n) % SAMPLE_SIZE_LPB] = RightSample8;
+        if (pcmLen < SAMPLE_SIZE_LPB) {
+            pcmLen++;
+        } else { // Buffer is full, advance pcmPos (oldest data is overwritten)
+            pcmPos = (pcmPos + 1) % SAMPLE_SIZE_LPB;
+        }
     }
-
     pcmBufDrained = false;
-    pcmLen = (pcmLen + len <= SAMPLE_SIZE_LPB) ? (pcmLen + len) : (SAMPLE_SIZE_LPB);
-    pcmPos = (pcmPos + len) % SAMPLE_SIZE_LPB;
-
 }

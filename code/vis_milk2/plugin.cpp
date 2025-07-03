@@ -881,7 +881,7 @@ void CPlugin::OverrideDefaults()
     // m_start_fullscreen      = 0;       // 0 or 1
     // m_start_desktop         = 0;       // 0 or 1
     // m_fake_fullscreen_mode  = 0;       // 0 or 1
-       m_max_fps_fs            = 60;       // 1-120, or 0 for 'unlimited' 
+       m_max_fps_fs            = 60;       // 1-120, or 0 for 'unlimited'
     // m_max_fps_dm            = 30;      // 1-120, or 0 for 'unlimited'
        m_max_fps_w             = 60;       // 1-120, or 0 for 'unlimited'
        m_show_press_f1_msg     = 0;       // 0 or 1
@@ -1134,7 +1134,7 @@ void CPlugin::MyPreInitialize()
     lstrcpyW(szConfigDir, GetConfigIniFile());
     wchar_t* p = wcsrchr(szConfigDir, L'\\');
     if (p) *(p+1) = 0;
-   	swprintf(m_szMsgIniFile, L"%s%s", szConfigDir, MSG_INIFILE );
+	swprintf(m_szMsgIniFile, L"%s%s", szConfigDir, MSG_INIFILE );
 	swprintf(m_szImgIniFile, L"%s%s", szConfigDir, IMG_INIFILE );
 }
 
@@ -3928,7 +3928,7 @@ void CPlugin::MyRenderFn(int redraw)
             // OR, to freeze time @ [preset] zero, so that when you exit menus,
             //   you don't run the risk of it changing the preset on you right away:
             m_fPresetStartTime = GetTime();
-        	m_fNextPresetTime = -1.0f;		// flags UpdateTime() to recompute this.
+		m_fNextPresetTime = -1.0f;		// flags UpdateTime() to recompute this.
         }
 
         //if (!m_bPresetListReady)
@@ -4392,7 +4392,7 @@ void CPlugin::MyRenderUI(
 						else if (bufA[temp_cursor_pos] == LINEFEED_CONTROL_CHAR)
 						{
 							for (int i=strlen(bufA); i>=temp_cursor_pos; i--)
-					    		bufA[i+1] = bufA[i];
+							bufA[i+1] = bufA[i];
 							bufA[temp_cursor_pos] = '_';
 						}
 						else if (bufA[temp_cursor_pos] == '_')
@@ -4410,7 +4410,7 @@ void CPlugin::MyRenderUI(
 						else if (bufA[temp_cursor_pos] == LINEFEED_CONTROL_CHAR)
 						{
 							for (int i=strlen(bufA); i>=temp_cursor_pos; i--)
-					    		bufA[i+1] = bufA[i];
+							bufA[i+1] = bufA[i];
 							bufA[temp_cursor_pos] = ' ';
 						}
 						//else if (buf[temp_cursor_pos] == '_')
@@ -4431,7 +4431,7 @@ void CPlugin::MyRenderUI(
 						else if (buf[temp_cursor_pos] == LINEFEED_CONTROL_CHAR)
 						{
 							for (int i=wcslen(buf); i>=temp_cursor_pos; i--)
-					    		buf[i+1] = buf[i];
+							buf[i+1] = buf[i];
 							buf[temp_cursor_pos] = L'_';
 						}
 						else if (buf[temp_cursor_pos] == L'_')
@@ -4449,7 +4449,7 @@ void CPlugin::MyRenderUI(
 						else if (buf[temp_cursor_pos] == LINEFEED_CONTROL_CHAR)
 						{
 							for (int i=wcslen(buf); i>=temp_cursor_pos; i--)
-					    		buf[i+1] = buf[i];
+							buf[i+1] = buf[i];
 							buf[temp_cursor_pos] = L' ';
 						}
 						//else if (buf[temp_cursor_pos] == '_')
@@ -4697,9 +4697,9 @@ void CPlugin::MyRenderUI(
 			swprintf(buf, wasabiApiLangString(IDS_FILE_IN_QUESTION_X_MILK), m_waitstring.szText);
 			rect.top += m_text.DrawTextW(GetFont(SIMPLE_FONT),  buf, -1, &rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true);
             if (m_bWarpShaderLock)
-    			rect.top += m_text.DrawTextW(GetFont(SIMPLE_FONT), wasabiApiLangString(IDS_WARNING_DO_NOT_FORGET_WARP_SHADER_WAS_LOCKED), -1, &rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, 0xFFFFFFFF, true, 0xFFCC0000);
+			rect.top += m_text.DrawTextW(GetFont(SIMPLE_FONT), wasabiApiLangString(IDS_WARNING_DO_NOT_FORGET_WARP_SHADER_WAS_LOCKED), -1, &rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, 0xFFFFFFFF, true, 0xFFCC0000);
             if (m_bCompShaderLock)
-    			rect.top += m_text.DrawTextW(GetFont(SIMPLE_FONT), wasabiApiLangString(IDS_WARNING_DO_NOT_FORGET_COMPOSITE_SHADER_WAS_LOCKED), -1, &rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, 0xFFFFFFFF, true, 0xFFCC0000);
+			rect.top += m_text.DrawTextW(GetFont(SIMPLE_FONT), wasabiApiLangString(IDS_WARNING_DO_NOT_FORGET_COMPOSITE_SHADER_WAS_LOCKED), -1, &rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, 0xFFFFFFFF, true, 0xFFCC0000);
             *upper_left_corner_y = rect.top;
 		}
 		else if (m_UI_mode == UI_MASHUP)
@@ -5428,20 +5428,20 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
 			if (m_fTimeBetweenPresets == 120.0f) { wsprintfW(m_szSongTitle, L"180 sec"); LaunchSongTitleAnim(); m_bPresetLockedByUser = false; m_fTimeBetweenPresets = 180.0f; m_fTimeBetweenPresetsRand = 5.0f; break; }
 			if (m_fTimeBetweenPresets == 180.0f) { wsprintfW(m_szSongTitle, L"unlimited sec"); LaunchSongTitleAnim(); m_fTimeBetweenPresets = 0.0f; m_fTimeBetweenPresetsRand = 0.0f; m_bPresetLockedByUser = true; break; }
 			else { wsprintfW(m_szSongTitle, L"30 sec"); LaunchSongTitleAnim(); m_bPresetLockedByUser = false; m_fTimeBetweenPresets = 30.0f; m_fTimeBetweenPresetsRand = 5.0f; break; }
-			return 0; // we processed (or absorbed) the key	
-				
+			return 0; // we processed (or absorbed) the key
+
                 case VK_F4: m_bShowPresetInfo = !m_bShowPresetInfo;  return 0; // we processed (or absorbed) the key
 		case VK_F5: m_bShowFPS = !m_bShowFPS;                return 0; // we processed (or absorbed) the key
 		case VK_F6: m_bShowRating = !m_bShowRating;	     return 0; // we processed (or absorbed) the key
-		
+
 		// BeatDrop2077 : AlwaysOnTop ON/OFF pressing F7
-		case VK_F7: 
+		case VK_F7:
 			m_bAlwaysOnTop = !m_bAlwaysOnTop;
 			if (m_bAlwaysOnTop) {
 				ToggleAlwaysOnTop(hWnd);
 				wsprintfW(m_szSongTitle, L"Always On Top ON"); LaunchSongTitleAnim();
 			}
-			else { 
+			else {
 				ToggleAlwaysOnTop(hWnd);
 				wsprintfW(m_szSongTitle, L"Always On Top OFF"); LaunchSongTitleAnim();
 			}
@@ -5598,13 +5598,13 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
 
 				case VK_UP:
                     for (rep=0; rep<nRepeat; rep++)
-	    				WaitString_SeekUpOneLine();
+					WaitString_SeekUpOneLine();
 					return 0; // we processed (or absorbed) the key
 
 				case VK_DOWN:
                     for (rep=0; rep<nRepeat; rep++)
-    					WaitString_SeekDownOneLine();
-  					return 0; // we processed (or absorbed) the key
+					WaitString_SeekDownOneLine();
+					return 0; // we processed (or absorbed) the key
 
 				case VK_BACK:
 					if (m_waitstring.nSelAnchorPos != -1)
@@ -5799,7 +5799,7 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
                         if (GetFileAttributesW(g_plugin.m_szPresetDir) == -1)
                             bSuccess = false;
                         if (bSuccess) {
-    						UpdatePresetList(false,true,false);
+						UpdatePresetList(false,true,false);
                             bSuccess = (m_nPresets > 0);
                         }
 
@@ -5853,9 +5853,9 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
                     {
 						m_waitstring.bActive = false;
                         if (m_waitstring.bDisplayAsCode)    // if were editing code...
-    						m_UI_mode = UI_MENU;    // return to menu
+						m_UI_mode = UI_MENU;    // return to menu
                         else
-    						m_UI_mode = UI_REGULAR; // otherwise don't (we might have been editing a filename, for example)
+						m_UI_mode = UI_REGULAR; // otherwise don't (we might have been editing a filename, for example)
                     }
                     else /*if (m_UI_mode == UI_EDIT_MENU_STRING || m_UI_mode == UI_CHANGEDIR || 1)*/
 					{
@@ -5971,8 +5971,8 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
 			else if (m_UI_mode == UI_LOAD)
 			{
                 for (rep=0; rep<nRepeat; rep++)
-    				if (m_nPresetListCurPos < m_nPresets - 1)
-	    				m_nPresetListCurPos++;
+				if (m_nPresetListCurPos < m_nPresets - 1)
+					m_nPresetListCurPos++;
 				return 0; // we processed (or absorbed) the key
 
 				// remember this preset's name so the next time they hit 'L' it jumps straight to it
@@ -6051,7 +6051,7 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
 
 					// stop display of text message.
 					m_supertext.fStartTime = -1.0f;
-    				return 0; // we processed (or absorbed) the key
+				return 0; // we processed (or absorbed) the key
 				}
 				else if (m_nNumericInputMode == NUMERIC_INPUT_MODE_SPRITE)
 				{
@@ -6093,7 +6093,7 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
 							m_texmgr.KillTex(newest);
 					}
 					return 0; // we processed (or absorbed) the key
-    			}
+			}
 			}
 			break;
 
@@ -6188,7 +6188,7 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
 			// pass on to parent
 			//PostMessage(m_hWndParent,message,wParam,lParam);
             PrevPreset(0);
-    		m_fHardCutThresh *= 2.0f;  // make it a little less likely that a random hard cut follows soon.
+		m_fHardCutThresh *= 2.0f;  // make it a little less likely that a random hard cut follows soon.
 		    //m_nNumericInputDigits = 0;
 			//m_nNumericInputNum = 0;
 			return 0;
@@ -6196,7 +6196,7 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
         case 'T':
             if (bCtrlHeldDown)
             {
-    			// stop display of custom message or song title.
+			// stop display of custom message or song title.
 			    m_supertext.fStartTime = -1.0f;
                 return 0;
             }
@@ -6229,7 +6229,7 @@ LRESULT CPlugin::MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lP
         return 1; // end case WM_KEYDOWN
 
 	case WM_KEYUP:
-    	return 1;
+	return 1;
 		break;
 
     default:
@@ -6907,7 +6907,7 @@ void CPlugin::PrevPreset(float fBlendTime)
         lstrcpyW(szFile, m_szPresetDir);	// note: m_szPresetDir always ends with '\'
         lstrcatW(szFile, m_presets[m_nCurrentPreset].szFilename.c_str());
 
-    	LoadPreset(szFile, fBlendTime);
+	LoadPreset(szFile, fBlendTime);
     }
     else
     {
@@ -6915,7 +6915,7 @@ void CPlugin::PrevPreset(float fBlendTime)
         if (m_presetHistoryPos != m_presetHistoryBackFence)
         {
             m_presetHistoryPos = prev;
-            LoadPreset( m_presetHistory[m_presetHistoryPos].c_str(), fBlendTime); 
+            LoadPreset( m_presetHistory[m_presetHistoryPos].c_str(), fBlendTime);
         }
     }
 }
@@ -6954,7 +6954,7 @@ void CPlugin::LoadRandomPreset(float fBlendTime)
         if (next != m_presetHistoryFwdFence && !bHistoryEmpty)
         {
             m_presetHistoryPos = next;
-            LoadPreset( m_presetHistory[m_presetHistoryPos].c_str(), fBlendTime); 
+            LoadPreset( m_presetHistory[m_presetHistoryPos].c_str(), fBlendTime);
             return;
         }
     }
@@ -7204,7 +7204,7 @@ void CPlugin::LoadPreset(const wchar_t *szPresetFilename, float fBlendTime)
 {
     // clear old error msg...
     if (m_nFramesSinceResize > 4)
-    	ClearErrors(ERR_PRESET);
+	ClearErrors(ERR_PRESET);
 
     // make sure preset still exists.  (might not if they are using the "back"/fwd buttons
     //  in RANDOM preset order and a file was renamed or deleted!)
@@ -7629,9 +7629,9 @@ retry:
 				temp_nDirs++;
         }
 
-    	if (!FindNextFileW(h, &fd))
+	if (!FindNextFileW(h, &fd))
         {
-        	FindClose(h);
+		FindClose(h);
             h = INVALID_HANDLE_VALUE;
 
             break;
@@ -7680,7 +7680,7 @@ retry:
 
         if (bRetrying)
         {
-        	LeaveCriticalSection(&g_cs);
+		LeaveCriticalSection(&g_cs);
             g_bThreadAlive = false;
             _endthreadex(0);
             return 0;
@@ -7694,7 +7694,7 @@ retry:
 
     if (g_plugin.m_bPresetListReady)
     {
-    	g_plugin.MergeSortPresets(0, g_plugin.m_nPresets-1);
+	g_plugin.MergeSortPresets(0, g_plugin.m_nPresets-1);
 
         // update cumulative ratings, since order changed...
         g_plugin.m_presets[0].fRatingCum = g_plugin.m_presets[0].fRatingThis;
@@ -7797,7 +7797,7 @@ void CPlugin::UpdatePresetList(bool bBackground, bool bForce, bool bTryReselectC
             // the load still takes a while even at THREAD_PRIORITY_ABOVE_NORMAL,
             // because it is waiting on the HDD so much...
             // but the OS is smart, and the CPU stays nice and zippy in other threads =)
-        	SetThreadPriority(g_hThread,THREAD_PRIORITY_ABOVE_NORMAL); //THREAD_PRIORITY_IDLE,    THREAD_PRIORITY_LOWEST,    THREAD_PRIORITY_NORMAL,    THREAD_PRIORITY_HIGHEST,
+		SetThreadPriority(g_hThread,THREAD_PRIORITY_ABOVE_NORMAL); //THREAD_PRIORITY_IDLE,    THREAD_PRIORITY_LOWEST,    THREAD_PRIORITY_NORMAL,    THREAD_PRIORITY_HIGHEST,
         }
     }
 
